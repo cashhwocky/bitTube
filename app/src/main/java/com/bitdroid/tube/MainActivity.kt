@@ -96,7 +96,10 @@ class MainActivity : ComponentActivity() {
         // Every launch: if GitHub has a newer build, the full-screen update page shows.
         Updater.dismissed = false
         if (com.bitdroid.tube.data.Account.signedIn) lifecycleScope.launch { com.bitdroid.tube.data.Account.refreshProfile() }
-        lifecycleScope.launch { Updater.checkOnLaunch(this@MainActivity) }
+        com.bitdroid.tube.ui.Setup.refresh(this)
+        lifecycleScope.launch {
+            Updater.checkOnLaunch(this@MainActivity)?.let { notifyUpdate(it.versionName) }
+        }
         // Get Clips ready in the background so the tab opens instantly.
         lifecycleScope.launch {
             kotlinx.coroutines.delay(1200)
@@ -120,7 +123,13 @@ class MainActivity : ComponentActivity() {
                 BackHandler(enabled = searching) { searching = false; query = "" }
                 BackHandler(enabled = !searching && !Playback.expanded && (Nav.stack.size > 1 || top != Screen.Home)) { Nav.back() }
 
-                Box(Modifier.fillMaxSize().backdrop()) {
+                if (com.bitdroid.tube.ui.Setup.needed) {
+                    // First run (or a permission/sign-in went missing): setup, no way around it.
+                    Box(Modifier.fillMaxSize()) {
+                        com.bitdroid.tube.ui.SetupScreen()
+                        if (!Updater.dismissed) UpdateScreen()
+                    }
+                } else Box(Modifier.fillMaxSize().backdrop()) {
                     Box(Modifier.fillMaxSize().hazeSource(haze)) {
                         AnimatedContent(
                             targetState = top to Nav.stack.size,
@@ -230,6 +239,25 @@ class MainActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
     }
 
+    /** "Update ready" notification, alongside the full-screen page. */
+    private fun notifyUpdate(version: String) {
+        if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) return
+        val nm = getSystemService(android.app.NotificationManager::class.java) ?: return
+        nm.createNotificationChannel(android.app.NotificationChannel("updates", "Updates", android.app.NotificationManager.IMPORTANCE_DEFAULT))
+        val open = android.app.PendingIntent.getActivity(
+            this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val n = android.app.Notification.Builder(this, "updates")
+            .setSmallIcon(R.drawable.ic_launcher_monochrome)
+            .setContentTitle("bitTube $version is ready")
+            .setContentText("Tap to update")
+            .setContentIntent(open)
+            .setAutoCancel(true)
+            .build()
+        nm.notify(1, n)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -239,6 +267,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         Bit.apply(this) // picks up wallpaper color changes for Material You
+        com.bitdroid.tube.ui.Setup.refresh(this)
     }
 
     override fun onStop() {
