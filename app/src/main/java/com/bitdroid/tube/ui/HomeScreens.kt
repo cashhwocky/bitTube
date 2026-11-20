@@ -173,11 +173,6 @@ fun HomeScreen() {
 
 // ================================================================== feed (subscriptions)
 
-private object FeedCache {
-    val items = mutableStateListOf<VideoRef>()
-    var loadedFor: Set<String> = emptySet()
-}
-
 @Composable
 fun FeedScreen() {
     if (com.bitdroid.tube.data.Account.signedIn) YouTubeFeed() else LocalFeed()
