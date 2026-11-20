@@ -44,14 +44,14 @@ object Prefs {
 
     fun raw(): SharedPreferences = sp
 
-    fun setQualityWifi(v: Int) { qualityWifi = v; sp.edit().putInt("q_wifi", v).apply() }
-    fun setQualityData(v: Int) { qualityData = v; sp.edit().putInt("q_data", v).apply() }
-    fun setSpeed(v: Float) { speed = v; sp.edit().putFloat("speed", v).apply() }
-    fun setAutoplay(v: Boolean) { autoplay = v; sp.edit().putBoolean("autoplay", v).apply() }
-    fun setShowDislikes(v: Boolean) { showDislikes = v; sp.edit().putBoolean("dislikes", v).apply() }
-    fun setKeepHistory(v: Boolean) { keepHistory = v; sp.edit().putBoolean("history", v).apply() }
-    fun setLoopClips(v: Boolean) { loopClips = v; sp.edit().putBoolean("loop_clips", v).apply() }
-    fun setSeekStep(v: Int) { seekStep = v; sp.edit().putInt("seek_step", v).apply() }
+    @JvmName("putQualityWifi") fun setQualityWifi(v: Int) { qualityWifi = v; sp.edit().putInt("q_wifi", v).apply() }
+    @JvmName("putQualityData") fun setQualityData(v: Int) { qualityData = v; sp.edit().putInt("q_data", v).apply() }
+    @JvmName("putSpeed") fun setSpeed(v: Float) { speed = v; sp.edit().putFloat("speed", v).apply() }
+    @JvmName("putAutoplay") fun setAutoplay(v: Boolean) { autoplay = v; sp.edit().putBoolean("autoplay", v).apply() }
+    @JvmName("putShowDislikes") fun setShowDislikes(v: Boolean) { showDislikes = v; sp.edit().putBoolean("dislikes", v).apply() }
+    @JvmName("putKeepHistory") fun setKeepHistory(v: Boolean) { keepHistory = v; sp.edit().putBoolean("history", v).apply() }
+    @JvmName("putLoopClips") fun setLoopClips(v: Boolean) { loopClips = v; sp.edit().putBoolean("loop_clips", v).apply() }
+    @JvmName("putSeekStep") fun setSeekStep(v: Int) { seekStep = v; sp.edit().putInt("seek_step", v).apply() }
 
     /** Quality cap right now: the mobile-data one on metered networks. 0 means "best available". */
     fun qualityNow(context: Context): Int {
