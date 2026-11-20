@@ -53,9 +53,15 @@ object Account {
 
     fun cookies(): String? = prefs().getString("cookies", null)?.takeIf { it.contains("SAPISID=") }
 
+    /** Changes every time you sign in or out; clip feeds loaded under the old state start over. */
+    var session by androidx.compose.runtime.mutableIntStateOf(0)
+        private set
+
     fun saveCookies(c: String) {
         prefs().edit().putString("cookies", c).apply()
+        reelToken = null
         signedIn = true
+        session++
     }
 
     fun signOut() {
@@ -65,6 +71,8 @@ object Account {
             CookieManager.getInstance().flush()
         }
         signedIn = false
+        reelToken = null
+        session++
         name = null
         handle = null
         photo = null
@@ -259,6 +267,11 @@ object Account {
     }
 
     fun resetShorts() { reelToken = null }
+
+    /** Shorts from channels you're subscribed to (the Shorts shelf on your subscriptions page). */
+    suspend fun subscriptionShorts(): List<VideoRef> = io {
+        parseShorts(call("browse", JSONObject().put("browseId", "FEsubscriptions"))).distinctBy { it.id }
+    }
 
     // ------------------------------------------------------------ actions
 

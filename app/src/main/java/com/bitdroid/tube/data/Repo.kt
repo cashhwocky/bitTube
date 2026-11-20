@@ -206,9 +206,15 @@ object Repo {
     suspend fun clips(): List<VideoRef> = coroutineScope {
         val round = clipRound++
         if (Account.signedIn) {
-            // Signed in: your own Shorts feed from YouTube.
-            val mine = runCatching { Account.shorts() }.getOrDefault(emptyList())
-            if (mine.size >= 3) return@coroutineScope mine
+            // Signed in: only ever your own Shorts. Try the personal sequence (twice), then the Shorts
+            // from your subscriptions; never fall back to random popular ones.
+            repeat(2) {
+                val mine = runCatching { Account.shorts() }.getOrDefault(emptyList())
+                if (mine.isNotEmpty()) return@coroutineScope mine
+                Account.resetShorts()
+            }
+            val subs = runCatching { Account.subscriptionShorts() }.getOrDefault(emptyList())
+            if (subs.isNotEmpty()) return@coroutineScope subs.shuffled()
         }
         if (round == 0) {
             // First batch: one quick search so the first clip appears right away.

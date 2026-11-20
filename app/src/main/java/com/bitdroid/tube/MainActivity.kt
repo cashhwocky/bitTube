@@ -103,7 +103,7 @@ class MainActivity : ComponentActivity() {
         // Get Clips ready in the background so the tab opens instantly.
         lifecycleScope.launch {
             kotlinx.coroutines.delay(1200)
-            runCatching { com.bitdroid.tube.ui.ClipFeed.warmUp() }
+            if (!com.bitdroid.tube.ui.Setup.needed) runCatching { com.bitdroid.tube.ui.ClipFeed.warmUp() }
         }
 
         setContent {

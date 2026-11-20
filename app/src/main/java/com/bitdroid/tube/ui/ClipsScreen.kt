@@ -86,6 +86,9 @@ import kotlin.random.Random
 /** The clip list survives tab switches, and gets warmed up at launch so the tab opens instantly. */
 object ClipFeed {
     val items = mutableStateListOf<VideoRef>()
+    /** Which sign-in session these clips were loaded under; clips from before you signed in get replaced. */
+    private var loadedSession = -1
+    val stale: Boolean get() = items.isNotEmpty() && loadedSession != com.bitdroid.tube.data.Account.session
     var page = 0
     var loading by mutableStateOf(false)
         private set
@@ -97,6 +100,7 @@ object ClipFeed {
         loading = true
         error = null
         try {
+            if (items.isEmpty()) loadedSession = com.bitdroid.tube.data.Account.session
             val seen = items.map { it.id }.toHashSet()
             items.addAll(Repo.clips().filter { it.id !in seen })
         } catch (e: Exception) {
@@ -109,7 +113,8 @@ object ClipFeed {
 
     /** Fetch the first batch and buffer the first two clips in the background (paused). */
     suspend fun warmUp() {
-        if (items.isEmpty()) more()
+        if (!com.bitdroid.tube.data.Account.signedIn) return
+        if (stale) fresh() else if (items.isEmpty()) more()
         items.getOrNull(page)?.let(ClipPlayback::preload)
         items.getOrNull(page + 1)?.let(ClipPlayback::preload)
     }
@@ -126,7 +131,7 @@ object ClipFeed {
 @Composable
 fun ClipsScreen() {
     val scope = rememberCoroutineScope()
-    LaunchedEffect(Unit) { if (ClipFeed.items.isEmpty()) ClipFeed.more() }
+    LaunchedEffect(com.bitdroid.tube.data.Account.session) { if (ClipFeed.stale) ClipFeed.fresh() else if (ClipFeed.items.isEmpty()) ClipFeed.more() }
     DisposableEffect(Unit) { onDispose { ClipPlayback.pause() } }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
