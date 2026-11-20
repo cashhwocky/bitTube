@@ -193,6 +193,73 @@ object Account {
         out.filter { it.id != "LL" && it.id != "WL" }.distinctBy { it.id }
     }
 
+    // ------------------------------------------------------------ shorts
+
+    private var reelToken: String? = null
+
+    private fun shortRef(id: String, title: String?, views: String?) = VideoRef(
+        url = "$YT/shorts/$id", title = title ?: "", channel = "", channelUrl = null,
+        thumb = "https://i.ytimg.com/vi/$id/hqdefault.jpg", avatar = null, duration = -1, viewsText = views, short = true,
+    )
+
+    /** Shorts on a page: the new shortsLockupViewModel and the older reelItemRenderer. */
+    private fun parseShorts(r: JSONObject): List<VideoRef> {
+        val found = mutableListOf<Pair<String, JSONObject>>()
+        collect(r, setOf("shortsLockupViewModel", "reelItemRenderer"), found)
+        return found.mapNotNull { (k, o) ->
+            if (k == "reelItemRenderer") {
+                val id = o.optString("videoId").ifEmpty { return@mapNotNull null }
+                shortRef(id, text(o.optJSONObject("headline")), text(o.optJSONObject("viewCountText")))
+            } else {
+                val id = firstString(o.optJSONObject("onTap"), "videoId") ?: firstString(o, "videoId") ?: return@mapNotNull null
+                val meta = o.optJSONObject("overlayMetadata")
+                shortRef(id, meta?.optJSONObject("primaryText")?.optString("content"), meta?.optJSONObject("secondaryText")?.optString("content"))
+            }
+        }
+    }
+
+    private fun sequence(token: String): JSONObject {
+        val a = call("reel/reel_watch_sequence", JSONObject().put("sequenceParams", token))
+        if ((a.optJSONArray("entries")?.length() ?: 0) > 0) return a
+        return call("reel/reel_watch_sequence", JSONObject().put("continuation", token))
+    }
+
+    /**
+     * Your personal Shorts feed: the same endless sequence the YouTube app plays, seeded from the
+     * Shorts YouTube recommends on your home page. Falls back to just those home Shorts.
+     */
+    suspend fun shorts(): List<VideoRef> = io {
+        val out = mutableListOf<VideoRef>()
+        runCatching {
+            if (reelToken == null) {
+                val home = call("browse", JSONObject().put("browseId", "FEwhat_to_watch"))
+                out += parseShorts(home)
+                val seed = out.firstOrNull()?.id ?: return@runCatching
+                val item = call(
+                    "reel/reel_item_watch",
+                    JSONObject().put("playerRequest", JSONObject().put("videoId", seed)).put("params", "CAUwAg%3D%3D").put("disablePlayerResponse", true),
+                )
+                reelToken = item.optString("sequenceContinuation").ifEmpty { null } ?: firstString(item, "sequenceContinuation")
+            }
+            val t = reelToken ?: return@runCatching
+            val seq = sequence(t)
+            val entries = seq.optJSONArray("entries")
+            if (entries != null) for (i in 0 until entries.length()) {
+                val id = firstString(entries.optJSONObject(i), "videoId") ?: continue
+                out += shortRef(id, null, null)
+            }
+            reelToken = continuation(seq) ?: seq.optString("continuation").ifEmpty { null }
+        }
+        if (out.isEmpty()) {
+            // No sequence: take Shorts from the home and subscriptions pages instead.
+            runCatching { out += parseShorts(call("browse", JSONObject().put("browseId", "FEwhat_to_watch"))) }
+            runCatching { out += parseShorts(call("browse", JSONObject().put("browseId", "FEsubscriptions"))) }
+        }
+        out.distinctBy { it.id }
+    }
+
+    fun resetShorts() { reelToken = null }
+
     // ------------------------------------------------------------ actions
 
     fun channelId(url: String?): String? = url?.let { Regex("/channel/(UC[A-Za-z0-9_-]{22})").find(it)?.groupValues?.get(1) }

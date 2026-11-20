@@ -199,68 +199,118 @@ object Playback {
     }
 }
 
-/** Separate player for the Clips feed so it never fights the main player. */
+/**
+ * Clips play from a small pool of ready-to-go players: the clip on screen plus the next two (and the
+ * one before) are already fetched, prepared and buffered, so swiping starts the next one instantly.
+ */
 object ClipPlayback {
-    lateinit var player: ExoPlayer
-        private set
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private var job: Job? = null
-
-    var current by mutableStateOf<String?>(null)
-        private set
-    var loading by mutableStateOf(false)
-        private set
-    var error by mutableStateOf<String?>(null)
-        private set
-    var playing by mutableStateOf(false)
-        private set
-    var aspect by mutableStateOf(9f / 16f)
-        private set
-    var info by mutableStateOf<StreamInfo?>(null)
-        private set
-
-    fun init(context: Context) {
-        player = newPlayer(context.applicationContext)
-        player.addListener(object : Player.Listener {
+    /** One preloaded clip. */
+    class Slot(val id: String, val player: ExoPlayer) {
+        var info by mutableStateOf<StreamInfo?>(null)
+        var loading by mutableStateOf(true)
+        var error by mutableStateOf<String?>(null)
+        var aspect by mutableStateOf(9f / 16f)
+        var playing by mutableStateOf(false)
+        var job: Job? = null
+        var counted = false
+        val listener = object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) { playing = isPlaying }
             override fun onVideoSizeChanged(size: VideoSize) {
                 if (size.width > 0 && size.height > 0) aspect = size.width * size.pixelWidthHeightRatio / size.height
             }
-            override fun onPlayerError(e: PlaybackException) { error = "Couldn't play this clip" }
-        })
+            override fun onPlaybackStateChanged(state: Int) { if (state == Player.STATE_READY) loading = false }
+            override fun onPlayerError(e: PlaybackException) { error = "Couldn't play this clip (${e.errorCodeName})"; loading = false }
+        }
     }
 
-    fun play(v: VideoRef) {
-        if (current == v.id && info != null) { player.play(); return }
-        current = v.id
-        info = null
-        error = null
-        loading = true
-        Playback.player.pause()
-        player.stop()
-        player.clearMediaItems()
-        job?.cancel()
-        job = scope.launch {
+    private lateinit var app: Context
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val slots = androidx.compose.runtime.mutableStateMapOf<String, Slot>()
+    private val spare = ArrayDeque<ExoPlayer>()
+
+    var activeId by mutableStateOf<String?>(null)
+        private set
+    val active: Slot? get() = activeId?.let { slots[it] }
+    val playing: Boolean get() = active?.playing == true
+
+    fun init(context: Context) { app = context.applicationContext }
+
+    fun slot(id: String): Slot? = slots[id]
+
+    /** Starts fetching + buffering [v] without playing it. Safe to call repeatedly. */
+    fun preload(v: VideoRef) {
+        if (slots.containsKey(v.id)) return
+        val player = spare.removeFirstOrNull() ?: newPlayer(app)
+        val slot = Slot(v.id, player)
+        player.addListener(slot.listener)
+        player.repeatMode = if (Prefs.loopClips) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+        player.volume = 1f
+        player.playWhenReady = false
+        slots[v.id] = slot
+        slot.job = scope.launch {
             try {
                 val i = Repo.stream(v.url)
-                if (current != v.id) return@launch
-                info = i
-                // Clips are small; 720p is plenty and starts fast.
+                slot.info = i
+                // 720p is plenty for a phone-sized clip and starts fast.
                 val (src, _) = Sources.build(i, 720)
-                player.repeatMode = if (Prefs.loopClips) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
                 player.setMediaSource(src)
                 player.prepare()
-                player.play()
-                VideoRef.from(i).copy(short = true).let { Library.addHistory(it); com.bitdroid.tube.data.Sync.watched(it) }
+                if (activeId == v.id) player.play()
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                error = "Couldn't load this clip"
-            } finally {
-                loading = false
+                slot.error = "Couldn't load this clip: ${e.message}"
+                slot.loading = false
             }
         }
     }
 
-    fun toggle() { if (player.isPlaying) player.pause() else player.play() }
-    fun pause() { if (::player.isInitialized) player.pause() }
+    /** Shows [v]: plays its (already warm) player, pauses the rest, warms up [upcoming], drops the far ones. */
+    fun activate(v: VideoRef, upcoming: List<VideoRef>, previous: VideoRef?) {
+        Playback.player.pause()
+        activeId = v.id
+        preload(v)
+        upcoming.forEach(::preload)
+        previous?.let(::preload)
+        val keep = (listOf(v.id) + upcoming.map { it.id } + listOfNotNull(previous?.id)).toSet()
+        slots.values.toList().forEach { s ->
+            when {
+                s.id == v.id -> {
+                    if (s.player.playbackState == Player.STATE_ENDED) s.player.seekTo(0)
+                    s.player.play()
+                    if (!s.counted) {
+                        s.counted = true
+                        scope.launch {
+                            // Count it once it has really started.
+                            val i = s.info ?: run { while (s.info == null && s.error == null) kotlinx.coroutines.delay(200); s.info } ?: return@launch
+                            VideoRef.from(i).copy(short = true).let { Library.addHistory(it); com.bitdroid.tube.data.Sync.watched(it) }
+                        }
+                    }
+                }
+                s.id in keep -> { s.player.pause(); if (s.player.currentPosition > 0) s.player.seekTo(0) }
+                else -> release(s)
+            }
+        }
+    }
+
+    private fun release(s: Slot) {
+        s.job?.cancel()
+        slots.remove(s.id)
+        s.player.removeListener(s.listener)
+        s.player.stop()
+        s.player.clearMediaItems()
+        if (spare.size < 2) spare.addLast(s.player) else s.player.release()
+    }
+
+    fun toggle() {
+        val p = active?.player ?: return
+        if (p.isPlaying) p.pause() else p.play()
+    }
+
+    fun pause() { slots.values.forEach { it.player.pause() } }
+
+    /** Called when leaving Clips for good (e.g. a fresh batch): frees every player. */
+    fun clear() {
+        slots.values.toList().forEach(::release)
+        activeId = null
+    }
 }

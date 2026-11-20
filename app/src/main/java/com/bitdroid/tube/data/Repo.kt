@@ -200,9 +200,26 @@ object Repo {
     private val clipTopics = listOf("", "funny", "music", "gaming", "tech", "satisfying", "cooking", "sports", "animals", "science", "art", "travel")
     private var clipRound = 0
 
+    fun resetClips() { clipRound = 0; Account.resetShorts() }
+
     /** A shuffled batch of clips: Shorts from channels you follow, mixed with popular ones. */
     suspend fun clips(): List<VideoRef> = coroutineScope {
         val round = clipRound++
+        if (Account.signedIn) {
+            // Signed in: your own Shorts feed from YouTube.
+            val mine = runCatching { Account.shorts() }.getOrDefault(emptyList())
+            if (mine.size >= 3) return@coroutineScope mine
+        }
+        if (round == 0) {
+            // First batch: one quick search so the first clip appears right away.
+            val first = runCatching {
+                io {
+                    SearchInfo.getInfo(yt, yt.searchQHFactory.fromQuery("#shorts", listOf("videos"), "")).relatedItems
+                        .filterIsInstance<StreamInfoItem>().map { VideoRef.from(it) }.filter { it.short || it.duration in 1..180 }
+                }
+            }.getOrDefault(emptyList())
+            if (first.isNotEmpty()) return@coroutineScope first.shuffled()
+        }
         val fromSubs = async(Dispatchers.IO) {
             Library.subscriptions.toList().shuffled().take(4).flatMap { c ->
                 runCatching {
@@ -213,7 +230,7 @@ object Repo {
                 }.getOrDefault(emptyList())
             }
         }
-        val topics = clipTopics.shuffled().take(2).plus(if (round == 0) listOf("") else emptyList()).distinct()
+        val topics = clipTopics.shuffled().take(2)
         val fromSearch = topics.map { t ->
             async(Dispatchers.IO) {
                 runCatching {

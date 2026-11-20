@@ -15,6 +15,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -38,6 +39,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -141,7 +143,7 @@ fun rememberProgress(player: Player): Progress {
  * when it's paused. Tap or drag anywhere to seek.
  */
 @Composable
-fun WavyProgress(progress: Progress, playing: Boolean, onSeek: (Long) -> Unit, modifier: Modifier = Modifier, color: Color = Bit.accent) {
+fun WavyProgress(progress: Progress, playing: Boolean, onSeek: (Long) -> Unit, modifier: Modifier = Modifier, color: Color = Bit.accent, onScrub: (Long) -> Unit = {}) {
     val amp by animateFloatAsState(if (playing) 1f else 0f, spring(dampingRatio = 0.7f), label = "amp")
     val t = rememberInfiniteTransition(label = "wave")
     val phase by t.animateFloat(0f, (2 * PI).toFloat(), infiniteRepeatable(tween(1300, easing = LinearEasing)), label = "phase")
@@ -150,18 +152,20 @@ fun WavyProgress(progress: Progress, playing: Boolean, onSeek: (Long) -> Unit, m
     val frac = if (drag >= 0) drag else if (dur > 0) progress.position.toFloat() / dur else 0f
     val buf = if (dur > 0) progress.buffered.toFloat() / dur else 0f
     Canvas(
-        modifier.fillMaxWidth().height(30.dp)
+        // Keep system back/home gestures from stealing drags near the screen edge.
+        modifier.fillMaxWidth().height(36.dp).systemGestureExclusion()
             .pointerInput(dur) {
                 detectTapGestures { o -> if (dur > 0) onSeek((o.x / size.width * dur).toLong()) }
             }
             .pointerInput(dur) {
                 detectHorizontalDragGestures(
-                    onDragStart = { o -> drag = (o.x / size.width).coerceIn(0f, 1f) },
-                    onDragEnd = { if (dur > 0 && drag >= 0) onSeek((drag * dur).toLong()); drag = -1f },
-                    onDragCancel = { drag = -1f },
+                    onDragStart = { o -> drag = (o.x / size.width).coerceIn(0f, 1f); onScrub((drag * dur).toLong()) },
+                    onDragEnd = { if (dur > 0 && drag >= 0) onSeek((drag * dur).toLong()); drag = -1f; onScrub(-1) },
+                    onDragCancel = { drag = -1f; onScrub(-1) },
                 ) { change, _ ->
                     change.consume()
                     drag = (change.position.x / size.width).coerceIn(0f, 1f)
+                    onScrub((drag * dur).toLong())
                 }
             },
     ) {
@@ -216,8 +220,9 @@ private fun PlayerBox(modifier: Modifier, fullscreen: Boolean) {
     var controls by remember { mutableStateOf(true) }
     var poke by remember { mutableStateOf(0) }
     var seekFlash by remember { mutableStateOf(0) } // -1 back, +1 forward
-    LaunchedEffect(controls, Playback.playing, poke) {
-        if (controls && Playback.playing) { delay(3200); controls = false }
+    var scrub by remember { mutableLongStateOf(-1L) } // where a drag-to-seek would land, -1 when not dragging
+    LaunchedEffect(controls, Playback.playing, poke, scrub >= 0) {
+        if (controls && Playback.playing && scrub < 0) { delay(3200); controls = false }
     }
     LaunchedEffect(seekFlash) { if (seekFlash != 0) { delay(550); seekFlash = 0 } }
     val step = Prefs.seekStep
@@ -243,17 +248,51 @@ private fun PlayerBox(modifier: Modifier, fullscreen: Boolean) {
                         poke++
                     },
                 )
-            }.pointerInput(fullscreen) {
-                var total = 0f
-                detectVerticalDragGestures(
-                    onDragStart = { total = 0f },
+            }.pointerInput(fullscreen, w) {
+                // Drag sideways anywhere on the video to scrub; drag down/up to minimize or go full screen.
+                var dx = 0f
+                var dy = 0f
+                var axis = 0 // 0 undecided, 1 horizontal, 2 vertical
+                var from = 0L
+                detectDragGestures(
+                    onDragStart = { dx = 0f; dy = 0f; axis = 0; from = player.currentPosition },
                     onDragEnd = {
-                        if (total > 140) { if (fullscreen) Playback.fullscreen = false else Playback.expanded = false }
-                        else if (total < -140 && !fullscreen) Playback.fullscreen = true
+                        if (axis == 1 && scrub >= 0) { player.seekTo(scrub); poke++ }
+                        if (axis == 2) {
+                            if (dy > 140) { if (fullscreen) Playback.fullscreen = false else Playback.expanded = false }
+                            else if (dy < -140 && !fullscreen) Playback.fullscreen = true
+                        }
+                        scrub = -1
                     },
-                ) { _, dy -> total += dy }
+                    onDragCancel = { scrub = -1 },
+                ) { change, amount ->
+                    dx += amount.x
+                    dy += amount.y
+                    if (axis == 0 && (kotlin.math.abs(dx) > 24 || kotlin.math.abs(dy) > 24)) {
+                        axis = if (kotlin.math.abs(dx) > kotlin.math.abs(dy)) 1 else 2
+                        if (axis == 1) { controls = true; view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK) }
+                    }
+                    if (axis == 1) {
+                        change.consume()
+                        val dur = player.duration.coerceAtLeast(0)
+                        // The full width of the video covers 90 seconds (or the whole video if it's shorter).
+                        val span = if (dur in 1..90_000) dur else 90_000L
+                        scrub = (from + (dx / w * span).toLong()).coerceIn(0, if (dur > 0) dur else Long.MAX_VALUE)
+                    }
+                }
             },
         )
+        // Drag-to-seek readout.
+        if (scrub >= 0) {
+            val delta = (scrub - player.currentPosition) / 1000
+            Column(
+                Modifier.align(Alignment.Center).clip(RoundedCornerShape(28.dp)).background(Color.Black.copy(alpha = 0.6f)).padding(horizontal = 22.dp, vertical = 14.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text("${clock(scrub / 1000)} / ${clock(progress.duration / 1000)}", style = mono(17f, Color.White))
+                Text(if (delta >= 0) "+${clock(delta)}" else "−${clock(-delta)}", style = mono(12.5f, Bit.accent))
+            }
+        }
         // Double-tap seek bubbles.
         AnimatedVisibility(seekFlash != 0, Modifier.align(if (seekFlash < 0) Alignment.CenterStart else Alignment.CenterEnd).padding(horizontal = 36.dp), enter = fadeIn(), exit = fadeOut()) {
             Box(Modifier.size(84.dp).clip(Shapes.Ripple).background(Bit.soft.copy(alpha = 0.85f)), contentAlignment = Alignment.Center) {
@@ -300,8 +339,8 @@ private fun PlayerBox(modifier: Modifier, fullscreen: Boolean) {
                     CookieButton(Icons.Rounded.Forward10, "Forward $step seconds", { Playback.seekBy(step); poke++ }, size = 50.dp, shape = Shapes.Flower, bg = Color.Black.copy(alpha = 0.35f), tint = Color.White)
                 }
                 Column(
-                    Modifier.fillMaxWidth().align(Alignment.BottomCenter).then(if (fullscreen) Modifier.navigationBarsPadding() else Modifier)
-                        .padding(start = 16.dp, end = 10.dp, bottom = 4.dp),
+                    Modifier.fillMaxWidth().align(Alignment.BottomCenter).then(if (fullscreen) Modifier.navigationBarsPadding().padding(horizontal = 18.dp) else Modifier)
+                        .padding(start = 16.dp, end = 10.dp, bottom = if (fullscreen) 22.dp else 4.dp),
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         val live = Playback.video?.live == true
@@ -314,7 +353,7 @@ private fun PlayerBox(modifier: Modifier, fullscreen: Boolean) {
                             { Playback.fullscreen = !Playback.fullscreen }, size = 38.dp, shape = Shapes.Circle, bg = Color.Transparent, tint = Color.White,
                         )
                     }
-                    WavyProgress(progress, Playback.playing, { player.seekTo(it); poke++ })
+                    WavyProgress(progress, Playback.playing, { player.seekTo(it); poke++ }, onScrub = { scrub = it })
                 }
             }
         }

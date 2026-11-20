@@ -97,6 +97,11 @@ class MainActivity : ComponentActivity() {
         Updater.dismissed = false
         if (com.bitdroid.tube.data.Account.signedIn) lifecycleScope.launch { com.bitdroid.tube.data.Account.refreshProfile() }
         lifecycleScope.launch { Updater.checkOnLaunch(this@MainActivity) }
+        // Get Clips ready in the background so the tab opens instantly.
+        lifecycleScope.launch {
+            kotlinx.coroutines.delay(1200)
+            runCatching { com.bitdroid.tube.ui.ClipFeed.warmUp() }
+        }
 
         setContent {
             BitTheme {
