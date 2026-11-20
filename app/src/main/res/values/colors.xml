@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="window_bg">#14111C</color>
+    <color name="icon_bg_bloom">#FFFFFF</color>
+    <color name="icon_bg_lilac">#EADDFF</color>
+    <color name="icon_bg_cookie">#2B2541</color>
+    <color name="icon_bg_mint">#B4F2D6</color>
+    <color name="icon_bg_peach">#FFDBC9</color>
+    <color name="icon_bg_ocean">#D1E4FF</color>
+    <color name="icon_bg_night">#000000</color>
+</resources>

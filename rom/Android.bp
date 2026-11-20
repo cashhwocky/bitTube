@@ -1,0 +1,14 @@
+// Drop this folder into your bitDroid tree (e.g. packages/apps/bitTube/)
+// together with bitTube.apk from the latest GitHub release, then add
+//   PRODUCT_PACKAGES += bitTube
+// to your product makefile.
+
+android_app_import {
+    name: "bitTube",
+    apk: "bitTube.apk",
+    presigned: true,
+    product_specific: true,
+    dex_preopt: {
+        enabled: true,
+    },
+}
