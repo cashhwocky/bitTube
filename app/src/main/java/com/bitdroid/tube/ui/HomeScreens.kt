@@ -29,6 +29,7 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Group
 import androidx.compose.material.icons.rounded.Refresh
@@ -90,7 +91,7 @@ fun SubscribeButton(c: com.bitdroid.tube.data.ChannelRef, modifier: Modifier = M
     Text(
         if (subbed) "Subscribed" else "Subscribe",
         style = body(14f, if (subbed) Bit.text else Bit.onAccent, FontWeight.Bold),
-        modifier = modifier.squish { Library.toggleSubscribe(c) }.clip(RoundedCornerShape(18.dp))
+        modifier = modifier.squish { com.bitdroid.tube.data.Sync.subscribe(c) }.clip(RoundedCornerShape(18.dp))
             .background(if (subbed) Bit.raised else Bit.accent).padding(horizontal = 16.dp, vertical = 10.dp),
     )
 }
@@ -116,9 +117,10 @@ fun HomeScreen() {
     }
     var pick by rememberSaveable { mutableStateOf(0) }
     val source = sources[pick.coerceIn(0, sources.lastIndex)]
-    val list = rememberPaged(source) {
+    val signedIn = com.bitdroid.tube.data.Account.signedIn
+    val list = rememberPaged(source to signedIn) {
         when (source) {
-            HomeSource.ForYou -> Repo.forYou()
+            HomeSource.ForYou -> if (signedIn) com.bitdroid.tube.data.Account.home() else Repo.forYou()
             is HomeSource.Kiosk -> Repo.kiosk(source.id)
             is HomeSource.Topic -> Repo.search(source.query, Repo.Filter.VIDEOS)
         }
@@ -139,7 +141,7 @@ fun HomeScreen() {
                 )
                 CookieButton(Icons.Rounded.Refresh, "Refresh", { scope.launch { list.refresh() } }, shape = Shapes.Flower)
                 Spacer(Modifier.width(8.dp))
-                CookieButton(Icons.Rounded.Settings, "Settings", { Nav.go(Screen.Settings) }, shape = Shapes.Sunny, bg = Bit.soft, tint = Bit.onSoft)
+                ProfileButton()
             }
         }
         item {
@@ -155,17 +157,8 @@ fun HomeScreen() {
                 }
             }
         }
-        if (source == HomeSource.ForYou && Library.subscriptions.isEmpty() && Library.history.isEmpty()) {
-            item {
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp).clip(RoundedCornerShape(26.dp)).background(Bit.soft).padding(18.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(Icons.Rounded.AutoAwesome, null, tint = Bit.onSoft, modifier = Modifier.size(26.dp))
-                    Spacer(Modifier.width(14.dp))
-                    Text("Watch and subscribe to things and this page learns what you like. Nothing leaves your phone.", style = body(14f, Bit.onSoft))
-                }
-            }
+        if (source == HomeSource.ForYou && !signedIn) {
+            item { SignInCard("Sign in to get your For you page", "Your real recommendations, subscriptions, likes and playlists from your YouTube account.") }
         }
         when {
             list.items.isEmpty() && list.loading -> item { CenterLoader() }
@@ -187,6 +180,62 @@ private object FeedCache {
 
 @Composable
 fun FeedScreen() {
+    if (com.bitdroid.tube.data.Account.signedIn) YouTubeFeed() else LocalFeed()
+}
+
+@Composable
+private fun CreatorStrip(filter: String?, onFilter: (String?) -> Unit) {
+    val subs = Library.subscriptions
+    LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        items(subs.toList(), key = { it.url }) { c ->
+            val on = filter == c.url
+            Column(Modifier.width(70.dp).squish { onFilter(if (on) null else c.url) }, horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(Modifier.size(66.dp).clip(Shapes.forKey(c.url)).background(if (on) Bit.accent else androidx.compose.ui.graphics.Color.Transparent).padding(4.dp)) {
+                    Avatar(c.avatar, c.url, 58.dp)
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(c.name, style = body(11.5f, if (on) Bit.accent else Bit.dim, FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
+
+/** Signed in: YouTube's own subscriptions feed, page after page. */
+@Composable
+private fun YouTubeFeed() {
+    val scope = rememberCoroutineScope()
+    var filter by rememberSaveable { mutableStateOf<String?>(null) }
+    val list = rememberPaged("yt-feed") { com.bitdroid.tube.data.Account.subscriptionFeed() }
+    val state = rememberLazyListState()
+    LoadMoreWhenNearEnd(state) { list.more() }
+    val shown = list.items.filter { e -> filter == null || (e is Entry.Video && e.v.channelUrl?.trimEnd('/') == filter?.trimEnd('/')) }
+    LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = bottomRoom())) {
+        item {
+            Header("Feed", "From your YouTube subscriptions") {
+                CookieButton(Icons.Rounded.Group, "Manage", { Nav.go(Screen.Subscriptions) }, shape = Shapes.Flower)
+                CookieButton(Icons.Rounded.Refresh, "Refresh", { scope.launch { list.refresh() } }, shape = Shapes.Sunny, bg = Bit.soft, tint = Bit.onSoft)
+            }
+        }
+        if (Library.subscriptions.isNotEmpty()) item { CreatorStrip(filter) { filter = it } }
+        when {
+            list.items.isEmpty() && list.loading -> item { CenterLoader() }
+            list.items.isEmpty() && list.error != null -> item { ErrorState(list.error!!) { scope.launch { list.refresh() } } }
+            else -> {
+                entries(shown)
+                if (list.loading) item { CenterLoader() }
+            }
+        }
+    }
+}
+
+private object FeedCache {
+    val items = mutableStateListOf<VideoRef>()
+    var loadedFor: Set<String> = emptySet()
+}
+
+/** Signed out: built on the phone from the channels you subscribed to in bitTube. */
+@Composable
+private fun LocalFeed() {
     val scope = rememberCoroutineScope()
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -202,7 +251,7 @@ fun FeedScreen() {
             FeedCache.loadedFor = subs.map { it.url }.toSet()
         } catch (e: Exception) {
             if (e is CancellationException) throw e
-            error = "Couldn't refresh your feed."
+            error = "Couldn't refresh your feed: ${e.message}"
         } finally {
             loading = false
         }
@@ -219,27 +268,12 @@ fun FeedScreen() {
                 CookieButton(Icons.Rounded.Refresh, "Refresh", { scope.launch { load() } }, shape = Shapes.Sunny, bg = Bit.soft, tint = Bit.onSoft)
             }
         }
+        item { SignInCard("Sign in for your real feed", "See everyone you're subscribed to on YouTube, and subscribe from here.") }
         if (subs.isEmpty()) {
-            item {
-                MessageState(Icons.Rounded.Subscriptions, "Nothing here yet", "Subscribe to channels and their new videos land here, newest first.")
-            }
+            item { MessageState(Icons.Rounded.Subscriptions, "Nothing here yet", "Subscribe to channels and their new videos land here, newest first.") }
             return@LazyColumn
         }
-        item {
-            // Creator strip: tap a cookie to filter the feed to that channel, tap again to clear.
-            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(subs, key = { it.url }) { c ->
-                    val on = filter == c.url
-                    Column(Modifier.width(70.dp).squish { filter = if (on) null else c.url }, horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(Modifier.size(66.dp).clip(Shapes.forKey(c.url)).background(if (on) Bit.accent else androidx.compose.ui.graphics.Color.Transparent).padding(4.dp)) {
-                            Avatar(c.avatar, c.url, 58.dp)
-                        }
-                        Spacer(Modifier.height(4.dp))
-                        Text(c.name, style = body(11.5f, if (on) Bit.accent else Bit.dim, FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-            }
-        }
+        item { CreatorStrip(filter) { filter = it } }
         when {
             shown.isEmpty() && loading -> item { CenterLoader() }
             shown.isEmpty() && error != null -> item { ErrorState(error!!) { scope.launch { load() } } }
@@ -275,7 +309,50 @@ private fun LibraryTile(icon: ImageVector, title: String, count: Int, shape: Sha
 }
 
 @Composable
+private fun YtLink(icon: ImageVector, title: String, sub: String? = null, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().squish(scale = 0.98f, onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(42.dp).clip(Shapes.Squircle).background(Bit.high), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = Bit.accent, modifier = Modifier.size(21.dp))
+        }
+        Spacer(Modifier.width(14.dp))
+        Text(title, style = body(15.5f, Bit.text, FontWeight.Medium), modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (sub != null) Text(sub, style = mono(11.5f))
+    }
+}
+
+/** A list straight from your YouTube account (liked, watch later, history, a playlist). */
+@Composable
+fun YtListScreen(browseId: String, title: String) {
+    val scope = rememberCoroutineScope()
+    val list = rememberPaged(browseId) { com.bitdroid.tube.data.Account.list(browseId) }
+    val state = rememberLazyListState()
+    LoadMoreWhenNearEnd(state) { list.more() }
+    LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = PaddingValues(bottom = bottomRoom())) {
+        item {
+            Header(title, "YouTube", onBack = { Nav.back() }) {
+                val first = (list.items.firstOrNull() as? Entry.Video)?.v
+                if (first != null) CookieButton(Icons.AutoMirrored.Rounded.PlaylistPlay, "Play", { Playback.open(first) }, bg = Bit.accent, tint = Bit.onAccent, shape = Shapes.Clover)
+                CookieButton(Icons.Rounded.Refresh, "Refresh", { scope.launch { list.refresh() } }, shape = Shapes.Sunny)
+            }
+        }
+        when {
+            list.items.isEmpty() && list.loading -> item { CenterLoader() }
+            list.items.isEmpty() && list.error != null -> item { ErrorState(list.error!!) { scope.launch { list.refresh() } } }
+            list.items.isEmpty() -> item { MessageState(Icons.AutoMirrored.Rounded.PlaylistPlay, "Nothing here", null) }
+            else -> {
+                entries(list.items, compact = true)
+                if (list.loading) item { CenterLoader() }
+            }
+        }
+    }
+}
+
+@Composable
 fun LibraryScreen() {
+    var ytPlaylists by remember { mutableStateOf(emptyList<com.bitdroid.tube.data.Account.YtPlaylist>()) }
+    LaunchedEffect(com.bitdroid.tube.data.Account.signedIn) {
+        if (com.bitdroid.tube.data.Account.signedIn) ytPlaylists = runCatching { com.bitdroid.tube.data.Account.playlists() }.getOrDefault(emptyList())
+    }
     var naming by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = bottomRoom())) {
@@ -296,6 +373,22 @@ fun LibraryScreen() {
                     LibraryTile(Icons.Rounded.Subscriptions, "Subscriptions", Library.subscriptions.size, Shapes.Gem, Bit.raised, Bit.accent, Modifier.weight(1f)) { Nav.go(Screen.Subscriptions) }
                 }
             }
+        }
+        if (com.bitdroid.tube.data.Account.signedIn) {
+            item { SectionLabel("On YouTube") }
+            item {
+                Column(Modifier.padding(horizontal = 14.dp).clip(RoundedCornerShape(30.dp)).background(Bit.surface).padding(vertical = 6.dp)) {
+                    YtLink(Icons.Rounded.Favorite, "Liked videos") { Nav.go(Screen.YtList("VLLL", "Liked videos")) }
+                    YtLink(Icons.Rounded.Schedule, "Watch later") { Nav.go(Screen.YtList("VLWL", "Watch later")) }
+                    YtLink(Icons.Rounded.History, "History") { Nav.go(Screen.YtList("FEhistory", "History")) }
+                    ytPlaylists.forEach { p ->
+                        YtLink(Icons.AutoMirrored.Rounded.PlaylistPlay, p.title, p.count) { Nav.go(Screen.YtList("VL" + p.id, p.title)) }
+                    }
+                }
+            }
+        } else {
+            item { Spacer(Modifier.height(8.dp)) }
+            item { SignInCard("Bring your YouTube library", "Liked videos, Watch later, history and playlists from your account.") }
         }
         if (Library.history.isNotEmpty()) {
             item { SectionLabel("Keep watching") }
@@ -401,5 +494,40 @@ fun LocalListScreen(screen: Screen) {
             }
         }
         entries(videos.map { Entry.Video(it) }, compact = true, playlist = pid, history = screen == Screen.History)
+    }
+}
+
+fun openSignIn(context: android.content.Context) {
+    context.startActivity(android.content.Intent(context, com.bitdroid.tube.LoginActivity::class.java))
+}
+
+/** Your YouTube photo in a cookie when signed in; opens Settings. */
+@Composable
+fun ProfileButton() {
+    val photo = com.bitdroid.tube.data.Account.photo
+    if (com.bitdroid.tube.data.Account.signedIn && photo != null) {
+        Box(Modifier.size(46.dp).squish { Nav.go(Screen.Settings) }.clip(Shapes.Sunny).background(Bit.soft).padding(3.dp)) {
+            Img(photo, Modifier.fillMaxSize(), Shapes.Sunny)
+        }
+    } else {
+        CookieButton(Icons.Rounded.Settings, "Settings", { Nav.go(Screen.Settings) }, shape = Shapes.Sunny, bg = Bit.soft, tint = Bit.onSoft)
+    }
+}
+
+@Composable
+fun SignInCard(title: String, message: String) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp).clip(RoundedCornerShape(30.dp)).background(Bit.soft).padding(20.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(46.dp).clip(Shapes.Clover).background(Bit.accent), contentAlignment = Alignment.Center) {
+                Icon(Icons.Rounded.AutoAwesome, null, tint = Bit.onAccent, modifier = Modifier.size(24.dp))
+            }
+            Spacer(Modifier.width(14.dp))
+            Text(title, style = display(16f, Bit.onSoft))
+        }
+        Spacer(Modifier.height(10.dp))
+        Text(message, style = body(14f, Bit.onSoft))
+        Spacer(Modifier.height(14.dp))
+        PillButton("Sign in", { openSignIn(context) }, icon = Icons.Rounded.AccountCircle)
     }
 }

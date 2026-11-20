@@ -162,7 +162,7 @@ private fun ClipPage(v: VideoRef, active: Boolean) {
             .pointerInput(active) {
                 detectTapGestures(
                     onTap = { if (active) { ClipPlayback.toggle(); showPlay = !ClipPlayback.player.playWhenReady } },
-                    onDoubleTap = { if (!Library.isLiked(details)) Library.toggleLike(details) },
+                    onDoubleTap = { if (!Library.isLiked(details)) com.bitdroid.tube.data.Sync.like(details) },
                 )
             },
     ) {
@@ -190,8 +190,8 @@ private fun ClipPage(v: VideoRef, active: Boolean) {
         val disliked = Library.isDisliked(details)
         val likes = clip?.likeCount?.takeIf { it >= 0 }
         Column(Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 26.dp), verticalArrangement = Arrangement.spacedBy(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            RailButton(if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, likes?.let { compact(it + if (liked) 1 else 0) }, liked) { Library.toggleLike(details) }
-            RailButton(if (disliked) Icons.Rounded.ThumbDown else Icons.Rounded.ThumbDownOffAlt, null, disliked) { Library.toggleDislike(details) }
+            RailButton(if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, likes?.let { compact(it + if (liked) 1 else 0) }, liked) { com.bitdroid.tube.data.Sync.like(details) }
+            RailButton(if (disliked) Icons.Rounded.ThumbDown else Icons.Rounded.ThumbDownOffAlt, null, disliked) { com.bitdroid.tube.data.Sync.dislike(details) }
             RailButton(Icons.AutoMirrored.Rounded.PlaylistAdd, null, false) { Sheets.save = details }
             RailButton(Icons.Rounded.Share, null, false) { share(context, details) }
         }

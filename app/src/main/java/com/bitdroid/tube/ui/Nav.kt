@@ -23,6 +23,7 @@ sealed interface Screen {
     data class Search(val query: String) : Screen
     data class Channel(val url: String, val name: String) : Screen
     data class Playlist(val id: String) : Screen
+    data class YtList(val browseId: String, val title: String) : Screen
 }
 
 /** A simple back stack; the bottom of the stack is always one of the four tabs. */
@@ -65,7 +66,7 @@ class PagedList(private val load: suspend () -> Paged) {
             last = p
         } catch (e: Exception) {
             if (e is CancellationException) throw e
-            error = if (e is java.io.IOException) "Couldn't connect. Are you online?" else "Something went wrong loading this."
+            error = "${e.javaClass.simpleName}: ${e.message ?: "no details"}"
         } finally {
             loading = false
         }

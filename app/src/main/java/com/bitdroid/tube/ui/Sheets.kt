@@ -57,6 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import com.bitdroid.tube.data.Library
 import com.bitdroid.tube.data.VideoRef
 import com.bitdroid.tube.data.meta
@@ -131,7 +132,7 @@ fun SheetHost() {
             Spacer(Modifier.height(8.dp))
             SheetItem(Icons.Rounded.PlayArrow, "Play") { close(); Playback.open(v) }
             val later = Library.inPlaylist(Library.WATCH_LATER, v)
-            SheetItem(Icons.Rounded.Schedule, if (later) "Remove from Watch later" else "Watch later") { Library.togglePlaylist(Library.WATCH_LATER, v); close() }
+            SheetItem(Icons.Rounded.Schedule, if (later) "Remove from Watch later" else "Watch later") { com.bitdroid.tube.data.Sync.watchLater(v); close() }
             SheetItem(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add to playlist") { close(); Sheets.save = v }
             SheetItem(Icons.Rounded.Share, "Share") { close(); share(context, v) }
             if (v.channelUrl != null) SheetItem(Icons.Rounded.AccountCircle, "Go to ${v.channel.ifBlank { "channel" }}") {
@@ -155,7 +156,40 @@ private fun SaveSheet(v: VideoRef, onDismiss: () -> Unit) {
     var name by remember { mutableStateOf("") }
     BloomSheet(onDismiss) {
         Text("Save to…", style = display(19f), modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
+        val signedIn = com.bitdroid.tube.data.Account.signedIn
+        var yt by remember { mutableStateOf<List<com.bitdroid.tube.data.Account.SaveOption>?>(null) }
+        var ytError by remember { mutableStateOf<String?>(null) }
+        val scope = androidx.compose.runtime.rememberCoroutineScope()
+        androidx.compose.runtime.LaunchedEffect(v.id, signedIn) {
+            if (signedIn) runCatching { com.bitdroid.tube.data.Account.saveOptions(v.id) }
+                .onSuccess { yt = it }.onFailure { ytError = it.message }
+        }
         Column(Modifier.verticalScroll(rememberScrollState()).weight(1f, fill = false)) {
+            if (signedIn) {
+                Text("ON YOUTUBE", style = mono(11f, Bit.accent), modifier = Modifier.padding(horizontal = 24.dp, vertical = 6.dp))
+                val opts = yt
+                when {
+                    ytError != null -> Text(ytError!!, style = body(13.5f, Bit.error), modifier = Modifier.padding(horizontal = 24.dp, vertical = 6.dp))
+                    opts == null -> Box(Modifier.fillMaxWidth().padding(10.dp), contentAlignment = Alignment.Center) { CookieLoader(size = 30.dp) }
+                    else -> opts.forEach { o ->
+                        SheetItem(if (o.id == "WL") Icons.Rounded.Schedule else Icons.AutoMirrored.Rounded.PlaylistAdd, o.title, trailing = {
+                            Box(Modifier.size(28.dp).clip(Shapes.Sunny).background(if (o.contains) Bit.accent else Bit.high), contentAlignment = Alignment.Center) {
+                                if (o.contains) Icon(Icons.Rounded.Check, null, tint = Bit.onAccent, modifier = Modifier.size(17.dp))
+                            }
+                        }) {
+                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                            val now = !o.contains
+                            yt = opts.map { if (it.id == o.id) it.copy(contains = now) else it }
+                            if (o.id == "WL" && now != Library.inPlaylist(Library.WATCH_LATER, v)) Library.togglePlaylist(Library.WATCH_LATER, v)
+                            scope.launch {
+                                runCatching { if (now) com.bitdroid.tube.data.Account.addTo(o.id, v.id) else com.bitdroid.tube.data.Account.removeFrom(o.id, v.id) }
+                                    .onFailure { ytError = it.message }
+                            }
+                        }
+                    }
+                }
+                Text("ON THIS PHONE", style = mono(11f, Bit.accent), modifier = Modifier.padding(horizontal = 24.dp, vertical = 6.dp))
+            }
             Library.playlists.forEach { p ->
                 val inIt = p.items.any { it.id == v.id }
                 SheetItem(if (p.id == Library.WATCH_LATER) Icons.Rounded.Schedule else Icons.AutoMirrored.Rounded.PlaylistAdd, p.name, onClick = {
@@ -173,16 +207,26 @@ private fun SaveSheet(v: VideoRef, onDismiss: () -> Unit) {
             Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp).clip(RoundedCornerShape(24.dp)).background(Bit.high).padding(start = 18.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            val scope2 = androidx.compose.runtime.rememberCoroutineScope()
             val create = {
                 if (name.isNotBlank()) {
-                    val p = Library.createPlaylist(name)
-                    Library.togglePlaylist(p.id, v)
+                    val title = name.trim()
+                    if (com.bitdroid.tube.data.Account.signedIn) {
+                        // Signed in: new playlists go to your YouTube account (private).
+                        scope2.launch {
+                            runCatching { com.bitdroid.tube.data.Account.createPlaylist(title, v.id) }
+                            onDismiss()
+                        }
+                    } else {
+                        val p = Library.createPlaylist(title)
+                        Library.togglePlaylist(p.id, v)
+                    }
                     name = ""
                     view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
                 }
             }
             Box(Modifier.weight(1f)) {
-                if (name.isEmpty()) Text("New playlist name", style = body(15.5f, Bit.dim))
+                if (name.isEmpty()) Text(if (com.bitdroid.tube.data.Account.signedIn) "New YouTube playlist" else "New playlist name", style = body(15.5f, Bit.dim))
                 BasicTextField(
                     name, { name = it }, singleLine = true, textStyle = body(15.5f),
                     cursorBrush = SolidColor(Bit.accent),

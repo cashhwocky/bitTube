@@ -373,11 +373,11 @@ fun WatchScreen() {
                 val likes = info?.likeCount?.takeIf { it >= 0 } ?: Playback.votes?.first?.takeIf { it >= 0 }
                 val dislikes = Playback.votes?.second?.takeIf { it >= 0 && Prefs.showDislikes }
                 Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ActionPill(if (liked) Icons.Rounded.ThumbUp else Icons.Rounded.ThumbUpOffAlt, likes?.let { compact(it + if (liked) 1 else 0) } ?: "Like", liked) { Library.toggleLike(v) }
-                    ActionPill(if (disliked) Icons.Rounded.ThumbDown else Icons.Rounded.ThumbDownOffAlt, dislikes?.let { compact(it + if (disliked) 1 else 0) } ?: "Dislike", disliked) { Library.toggleDislike(v) }
+                    ActionPill(if (liked) Icons.Rounded.ThumbUp else Icons.Rounded.ThumbUpOffAlt, likes?.let { compact(it + if (liked) 1 else 0) } ?: "Like", liked) { com.bitdroid.tube.data.Sync.like(v) }
+                    ActionPill(if (disliked) Icons.Rounded.ThumbDown else Icons.Rounded.ThumbDownOffAlt, dislikes?.let { compact(it + if (disliked) 1 else 0) } ?: "Dislike", disliked) { com.bitdroid.tube.data.Sync.dislike(v) }
                     ActionPill(Icons.AutoMirrored.Rounded.PlaylistAdd, "Save") { Sheets.save = v }
                     val later = Library.inPlaylist(Library.WATCH_LATER, v)
-                    ActionPill(Icons.Rounded.Schedule, if (later) "Saved for later" else "Later", later) { Library.togglePlaylist(Library.WATCH_LATER, v) }
+                    ActionPill(Icons.Rounded.Schedule, if (later) "Saved for later" else "Later", later) { com.bitdroid.tube.data.Sync.watchLater(v) }
                     ActionPill(Icons.Rounded.Share, "Share") { share(context, v) }
                     ActionPill(Icons.Rounded.Tune, "Quality") { Sheets.quality = true }
                 }

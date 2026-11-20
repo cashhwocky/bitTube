@@ -29,6 +29,8 @@ object Prefs {
         private set
     var seekStep by mutableIntStateOf(10)
         private set
+    var syncHistory by mutableStateOf(true)
+        private set
 
     fun init(context: Context) {
         sp = context.getSharedPreferences("bittube", Context.MODE_PRIVATE)
@@ -40,6 +42,7 @@ object Prefs {
         keepHistory = sp.getBoolean("history", true)
         loopClips = sp.getBoolean("loop_clips", true)
         seekStep = sp.getInt("seek_step", 10)
+        syncHistory = sp.getBoolean("sync_history", true)
     }
 
     fun raw(): SharedPreferences = sp
@@ -51,6 +54,7 @@ object Prefs {
     @JvmName("putShowDislikes") fun setShowDislikes(v: Boolean) { showDislikes = v; sp.edit().putBoolean("dislikes", v).apply() }
     @JvmName("putKeepHistory") fun setKeepHistory(v: Boolean) { keepHistory = v; sp.edit().putBoolean("history", v).apply() }
     @JvmName("putLoopClips") fun setLoopClips(v: Boolean) { loopClips = v; sp.edit().putBoolean("loop_clips", v).apply() }
+    @JvmName("putSyncHistory") fun setSyncHistory(v: Boolean) { syncHistory = v; sp.edit().putBoolean("sync_history", v).apply() }
     @JvmName("putSeekStep") fun setSeekStep(v: Int) { seekStep = v; sp.edit().putInt("seek_step", v).apply() }
 
     /** Quality cap right now: the mobile-data one on metered networks. 0 means "best available". */
@@ -65,8 +69,8 @@ object AppIcons {
     data class Choice(val key: String, val label: String, val bg: Long, val fg: Int)
 
     val all = listOf(
-        Choice("bloom", "Bloom", 0xFFFFFFFF, com.bitdroid.tube.R.drawable.ic_fg_tube_violet),
         Choice("lilac", "Lilac", 0xFFEADDFF, com.bitdroid.tube.R.drawable.ic_fg_tube_lilac),
+        Choice("bloom", "White", 0xFFFFFFFF, com.bitdroid.tube.R.drawable.ic_fg_tube_violet),
         Choice("cookie", "Cookie", 0xFF2B2541, com.bitdroid.tube.R.drawable.ic_fg_cookie),
         Choice("mint", "Mint", 0xFFB4F2D6, com.bitdroid.tube.R.drawable.ic_fg_tube_mint),
         Choice("peach", "Peach", 0xFFFFDBC9, com.bitdroid.tube.R.drawable.ic_fg_tube_peach),
@@ -74,7 +78,7 @@ object AppIcons {
         Choice("night", "Night", 0xFF000000, com.bitdroid.tube.R.drawable.ic_fg_tube_night),
     )
 
-    fun current(context: Context): String = Prefs.raw().getString("app_icon", "bloom") ?: "bloom"
+    fun current(context: Context): String = Prefs.raw().getString("app_icon", "lilac") ?: "lilac"
 
     fun set(context: Context, key: String) {
         val chosen = all.firstOrNull { it.key == key } ?: return

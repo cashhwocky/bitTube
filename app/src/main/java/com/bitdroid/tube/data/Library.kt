@@ -88,6 +88,20 @@ object Library {
         save()
     }
 
+    /** Merges your YouTube subscriptions in after signing in. */
+    fun importSubscriptions(list: List<ChannelRef>) {
+        val have = subscriptions.map { it.url.trimEnd('/') }.toHashSet()
+        subscriptions.addAll(list.filter { it.url.trimEnd('/') !in have })
+        save()
+    }
+
+    /** Local mirror only (used when YouTube already did the change). */
+    fun setSubscribed(c: ChannelRef, on: Boolean) {
+        val i = subscriptions.indexOfFirst { sameChannel(it.url, c.url) }
+        if (on && i < 0) subscriptions.add(0, c) else if (!on && i >= 0) subscriptions.removeAt(i)
+        save()
+    }
+
     private fun sameChannel(a: String, b: String) = a.trimEnd('/') == b.trimEnd('/')
 
     // ------------------------------------------------------------ likes

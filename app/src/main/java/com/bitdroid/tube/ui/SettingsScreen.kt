@@ -44,7 +44,10 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.bitdroid.tube.data.Account
 import com.bitdroid.tube.data.AppIcons
+import kotlinx.coroutines.launch
+import androidx.compose.material.icons.rounded.AccountCircle
 import com.bitdroid.tube.data.Library
 import com.bitdroid.tube.data.Prefs
 
@@ -109,6 +112,42 @@ fun SettingsScreen() {
     val context = LocalContext.current
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = bottomRoom())) {
         item { Header("Settings", "bitTube", onBack = { Nav.back() }) }
+        item {
+            val scope = androidx.compose.runtime.rememberCoroutineScope()
+            var importing by remember { mutableStateOf<String?>(null) }
+            Group("Account") {
+                if (Account.signedIn) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(56.dp).clip(Shapes.Sunny).background(Bit.soft).padding(3.dp)) {
+                            Img(Account.photo, Modifier.fillMaxSize(), Shapes.Sunny)
+                        }
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(Account.name ?: "Signed in", style = body(17f, Bit.text, FontWeight.SemiBold))
+                            Text(Account.handle ?: "YouTube account", style = body(13f, Bit.dim))
+                        }
+                        PillButton("Sign out", { Account.signOut() }, filled = false)
+                    }
+                    ToggleRow("Send watch history to YouTube", "So your For you page learns from what you watch here", Prefs.syncHistory) { Prefs.setSyncHistory(it) }
+                    ActionRow("Import subscriptions", importing ?: "Copy everyone you follow on YouTube into bitTube") {
+                        importing = "Importing…"
+                        scope.launch {
+                            importing = runCatching { Account.channels() }.fold(
+                                { Library.importSubscriptions(it); "Imported ${it.size} channels" },
+                                { "Failed: ${it.message}" },
+                            )
+                        }
+                    }
+                } else {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
+                        Text("Sign in to YouTube", style = body(17f, Bit.text, FontWeight.SemiBold))
+                        Text("Get your For you page, subscriptions feed, likes, Watch later and playlists. You sign in on Google's own page; bitTube only keeps the session on this phone.", style = body(13.5f, Bit.dim))
+                        Spacer(Modifier.height(12.dp))
+                        PillButton("Sign in", { openSignIn(context) }, icon = androidx.compose.material.icons.Icons.Rounded.AccountCircle)
+                    }
+                }
+            }
+        }
         item { Group("Look") { ThemePicker(); IconPicker() } }
         item {
             Group("Playback") {
@@ -142,7 +181,7 @@ fun SettingsScreen() {
             Group("About") {
                 val version = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "?" }
                 ActionRow("bitTube $version", "Made by Alex Desrosier · for bitDroid") {}
-                ActionRow("Powered by NewPipe Extractor", "No account, no API key. Subscriptions, likes and playlists live on your phone.") {}
+                ActionRow("Powered by NewPipe Extractor", "Playback needs no account or API key. Signing in is optional.") {}
             }
         }
     }

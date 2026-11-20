@@ -135,6 +135,7 @@ object Playback {
                 video = full
                 qualities = Sources.qualities(i)
                 Library.addHistory(full)
+                com.bitdroid.tube.data.Sync.watched(full)
                 start(i, Library.positions[full.id] ?: 0L)
                 launch { votes = Repo.votes(full.id) }
             } catch (e: Exception) {
@@ -250,7 +251,7 @@ object ClipPlayback {
                 player.setMediaSource(src)
                 player.prepare()
                 player.play()
-                Library.addHistory(VideoRef.from(i).copy(short = true))
+                VideoRef.from(i).copy(short = true).let { Library.addHistory(it); com.bitdroid.tube.data.Sync.watched(it) }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 error = "Couldn't load this clip"

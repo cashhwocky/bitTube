@@ -95,6 +95,7 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) handleIntent(intent)
         // Every launch: if GitHub has a newer build, the full-screen update page shows.
         Updater.dismissed = false
+        if (com.bitdroid.tube.data.Account.signedIn) lifecycleScope.launch { com.bitdroid.tube.data.Account.refreshProfile() }
         lifecycleScope.launch { Updater.checkOnLaunch(this@MainActivity) }
 
         setContent {
@@ -142,6 +143,7 @@ class MainActivity : ComponentActivity() {
                                 Screen.Liked, Screen.History, is Screen.Playlist -> LocalListScreen(screen)
                                 is Screen.Search -> SearchScreen(screen.query)
                                 is Screen.Channel -> ChannelScreen(screen.url, screen.name)
+                                is Screen.YtList -> com.bitdroid.tube.ui.YtListScreen(screen.browseId, screen.title)
                             }
                         }
                         if (searching) {

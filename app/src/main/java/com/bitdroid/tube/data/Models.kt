@@ -22,13 +22,15 @@ data class VideoRef(
     val age: String? = null,
     val live: Boolean = false,
     val short: Boolean = false,
+    /** Already-formatted view count from YouTube's own pages ("1.2M views"). */
+    val viewsText: String? = null,
 ) {
     val id: String get() = videoId(url) ?: url
 
     fun toJson(): JSONObject = JSONObject()
         .put("url", url).put("title", title).put("channel", channel).put("channelUrl", channelUrl)
         .put("thumb", thumb).put("avatar", avatar).put("duration", duration).put("views", views)
-        .put("age", age).put("live", live).put("short", short)
+        .put("age", age).put("live", live).put("short", short).put("viewsText", viewsText)
 
     companion object {
         fun fromJson(o: JSONObject) = VideoRef(
@@ -43,6 +45,7 @@ data class VideoRef(
             age = o.optString("age").ifEmpty { null }?.takeIf { it != "null" },
             live = o.optBoolean("live"),
             short = o.optBoolean("short"),
+            viewsText = o.optString("viewsText").ifEmpty { null }?.takeIf { it != "null" },
         )
 
         fun from(item: StreamInfoItem) = VideoRef(
@@ -147,6 +150,6 @@ fun clock(seconds: Long): String {
 
 fun VideoRef.meta(): String = listOfNotNull(
     channel.takeIf { it.isNotBlank() },
-    if (views >= 0) "${compact(views)} views" else null,
+    if (views >= 0) "${compact(views)} views" else viewsText,
     age,
 ).joinToString(" · ")

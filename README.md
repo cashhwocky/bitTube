@@ -4,11 +4,12 @@ bitTube. For bitDroid.
 
 A video app for bitDroid (Pixel 10, Android 17) in the Bloom / Material You style: tonal colors,
 scalloped cookie shapes, squishy springs, and the floating tab bar from bitMessages.
-Kotlin + Jetpack Compose. No Google account and no API key: YouTube data comes through
+Kotlin + Jetpack Compose. No API key: YouTube data comes through
 [NewPipe Extractor](https://github.com/TeamNewPipe/NewPipeExtractor), playback is Media3 ExoPlayer.
 
 ## Features
 
+- **Sign in** with your YouTube account (Google's own sign-in page, like AlexLMP): your real For you page, subscriptions feed, likes and dislikes, subscribing, Watch later, playlists and history, synced both ways
 - **Home**: For you (new uploads from your subscriptions mixed with videos related to what you watched), YouTube's charts, and topic chips
 - **Clips**: a vertical swipe feed of short videos (Shorts from channels you follow, plus popular ones), loop, double-tap to like
 - **Feed**: everything new from your subscriptions, newest first, with a creator strip to filter by channel
@@ -18,11 +19,11 @@ Kotlin + Jetpack Compose. No Google account and no API key: YouTube data comes t
 - **Quality**: pick any resolution per video, plus separate defaults for Wi-Fi and mobile data; playback speed
 - **Likes, dislikes** (counts from Return YouTube Dislike), **subscribe**, **add to playlist**, share
 - **Themes**: Lilac (default), Material You (wallpaper colors), Mint, Peach, Ocean, Rose, Midnight
-- **App icons**: Bloom, Lilac, Cookie, Mint, Peach, Ocean, Night
+- **App icons**: Lilac (default), White, Cookie, Mint, Peach, Ocean, Night
 - **In-app updates**: when a newer release is on GitHub, a full-screen update page appears every time the app opens
 - Opens youtube.com and youtu.be links
 
-Subscriptions, likes, playlists and history are stored on the phone only.
+Signed out, subscriptions, likes, playlists and history are stored on the phone only. Signed in, they also go to your YouTube account.
 
 ## Install
 
