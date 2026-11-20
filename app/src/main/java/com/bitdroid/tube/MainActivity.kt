@@ -32,7 +32,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Home
-import androidx.compose.material.icons.rounded.Slideshow
 import androidx.compose.material.icons.rounded.Subscriptions
 import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.material3.Text
@@ -62,7 +61,6 @@ import com.bitdroid.tube.player.Playback
 import com.bitdroid.tube.ui.Bit
 import com.bitdroid.tube.ui.BitTheme
 import com.bitdroid.tube.ui.ChannelScreen
-import com.bitdroid.tube.ui.ClipsScreen
 import com.bitdroid.tube.ui.FeedScreen
 import com.bitdroid.tube.ui.FloatingTabBar
 import com.bitdroid.tube.ui.HomeScreen
@@ -99,11 +97,6 @@ class MainActivity : ComponentActivity() {
         com.bitdroid.tube.ui.Setup.refresh(this)
         lifecycleScope.launch {
             Updater.checkOnLaunch(this@MainActivity)?.let { notifyUpdate(it.versionName) }
-        }
-        // Get Clips ready in the background so the tab opens instantly.
-        lifecycleScope.launch {
-            kotlinx.coroutines.delay(1200)
-            if (!com.bitdroid.tube.ui.Setup.needed) runCatching { com.bitdroid.tube.ui.ClipFeed.warmUp() }
         }
 
         setContent {
@@ -149,7 +142,6 @@ class MainActivity : ComponentActivity() {
                         ) { (screen, _) ->
                             when (screen) {
                                 Screen.Home -> HomeScreen()
-                                Screen.Clips -> ClipsScreen()
                                 Screen.Feed -> FeedScreen()
                                 Screen.Library -> LibraryScreen()
                                 Screen.Settings -> SettingsScreen()
@@ -179,7 +171,6 @@ class MainActivity : ComponentActivity() {
                             haze = haze,
                             tabs = listOf(
                                 TabItem(Icons.Rounded.Home, "Home"),
-                                TabItem(Icons.Rounded.Slideshow, "Clips"),
                                 TabItem(Icons.Rounded.Subscriptions, "Feed"),
                                 TabItem(Icons.Rounded.VideoLibrary, "Library"),
                             ),

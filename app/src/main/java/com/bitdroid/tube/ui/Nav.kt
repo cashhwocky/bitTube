@@ -13,7 +13,6 @@ import kotlinx.coroutines.CancellationException
 
 sealed interface Screen {
     data object Home : Screen
-    data object Clips : Screen
     data object Feed : Screen
     data object Library : Screen
     data object Settings : Screen
@@ -26,9 +25,9 @@ sealed interface Screen {
     data class YtList(val browseId: String, val title: String) : Screen
 }
 
-/** A simple back stack; the bottom of the stack is always one of the four tabs. */
+/** A simple back stack; the bottom of the stack is always one of the tabs. */
 object Nav {
-    val tabs = listOf(Screen.Home, Screen.Clips, Screen.Feed, Screen.Library)
+    val tabs = listOf(Screen.Home, Screen.Feed, Screen.Library)
     val stack = mutableStateListOf<Screen>(Screen.Home)
     val top: Screen get() = stack.last()
 

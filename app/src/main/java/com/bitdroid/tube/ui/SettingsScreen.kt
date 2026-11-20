@@ -176,6 +176,7 @@ fun SettingsScreen() {
                 ActionRow("Clear search history", cleared?.takeIf { it == "s" }?.let { "Cleared" } ?: "${Library.searches.size} searches") { Library.clearSearches(); cleared = "s" }
             }
         }
+        item { Group("Shorts") { Box(Modifier.padding(8.dp)) { BitClipsCard() } } }
         item { Group("Updates") { UpdateCard() } }
         item {
             Group("About") {

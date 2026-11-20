@@ -11,7 +11,7 @@ Kotlin + Jetpack Compose. No API key: YouTube data comes through
 
 - **Sign in** with your YouTube account (Google's own sign-in page, like AlexLMP): your real For you page, subscriptions feed, likes and dislikes, subscribing, Watch later, playlists and history, synced both ways
 - **Home**: For you (new uploads from your subscriptions mixed with videos related to what you watched), YouTube's charts, and topic chips
-- **Clips**: a vertical swipe feed of short videos (Shorts from channels you follow, plus popular ones), loop, double-tap to like
+- **Shorts** live in their own app, [bitClips](https://github.com/cashhwocky/bitClips); setup and Settings link to it
 - **Feed**: everything new from your subscriptions, newest first, with a creator strip to filter by channel
 - **Library**: liked videos, Watch later, history with resume points, your own playlists
 - **Search** from the clover button, with suggestions and recent searches

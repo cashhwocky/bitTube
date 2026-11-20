@@ -54,6 +54,7 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.InstallMobile
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.Slideshow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -238,7 +239,7 @@ private fun Welcome(onNext: () -> Unit) {
             style = display(32f, weight = FontWeight.ExtraBold), textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(12.dp))
-        Text("Videos, Clips and your whole YouTube, in Bloom.\nTwo quick steps and you're in.", style = body(15.5f, Bit.dim), textAlign = TextAlign.Center)
+        Text("Videos and your whole YouTube, in Bloom.\nTwo quick steps and you're in.", style = body(15.5f, Bit.dim), textAlign = TextAlign.Center)
     }
 }
 
@@ -304,7 +305,7 @@ private fun SignIn() {
     StepPage(
         2, { Hero(Icons.Rounded.AccountCircle) },
         title = "Sign in to YouTube",
-        subtitle = "Required. Your For you page, Clips, subscriptions, likes and playlists all come from your account.",
+        subtitle = "Required. Your For you page, subscriptions, likes and playlists all come from your account.",
         button = "Sign in with Google", enabled = true, onNext = { openSignIn(context) },
     ) {
         Row(
@@ -329,7 +330,49 @@ private fun Done() {
             } else Hero(Icons.Rounded.Check)
         },
         title = if (first != null) "You're all set, $first" else "You're all set",
-        subtitle = "Your For you page and Clips are ready.",
+        subtitle = "Your For you page is ready.",
         button = "Start watching", enabled = true, onNext = { Setup.finish() },
-    )
+    ) { BitClipsCard() }
+}
+
+const val BITCLIPS_PACKAGE = "com.bitdroid.clips"
+const val BITCLIPS_URL = "https://github.com/cashhwocky/bitClips/releases/latest"
+
+fun bitClipsInstalled(context: android.content.Context): Boolean =
+    runCatching { context.packageManager.getPackageInfo(BITCLIPS_PACKAGE, 0); true }.getOrDefault(false)
+
+/** Shorts aren't in bitTube: they have their own app, bitClips. Explains that and links to it. */
+@Composable
+fun BitClipsCard() {
+    val context = LocalContext.current
+    var installed by androidx.compose.runtime.remember { mutableStateOf(bitClipsInstalled(context)) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { installed = bitClipsInstalled(context) }
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(30.dp)).background(Bit.surface).padding(18.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(52.dp).clip(Shapes.Squircle).background(Color(0xFFEADDFF)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Rounded.Slideshow, null, tint = Color(0xFF4F378B), modifier = Modifier.size(28.dp))
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Looking for Shorts?", style = display(16f))
+                Text("They live in bitClips now", style = body(13f, Bit.accent, FontWeight.SemiBold))
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "bitClips is our separate app just for YouTube Shorts (we call them Clips): full-screen, swipe-up, TikTok-style, " +
+                "with your own personal Shorts feed, comments and double-tap likes. Keeping Shorts out of bitTube means bitTube " +
+                "stays focused on real videos, and bitClips can be built entirely around swiping.",
+            style = body(13.5f, Bit.dim),
+        )
+        Spacer(Modifier.height(14.dp))
+        PillButton(
+            if (installed) "Open bitClips" else "Get bitClips",
+            {
+                val open = context.packageManager.getLaunchIntentForPackage(BITCLIPS_PACKAGE)
+                context.startActivity(open ?: Intent(Intent.ACTION_VIEW, Uri.parse(BITCLIPS_URL)))
+            },
+            icon = if (installed) Icons.Rounded.Slideshow else Icons.Rounded.InstallMobile,
+        )
+    }
 }
