@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Add
@@ -386,7 +387,7 @@ fun LocalListScreen(screen: Screen) {
                 if (videos.isNotEmpty()) CookieButton(Icons.AutoMirrored.Rounded.PlaylistPlay, "Play all", { Playback.open(videos.first()) }, bg = Bit.accent, tint = Bit.onAccent, shape = Shapes.Clover)
                 if (screen == Screen.History && videos.isNotEmpty()) CookieButton(Icons.Rounded.History, "Clear history", { Library.clearHistory() }, shape = Shapes.Sunny)
                 if (screen is Screen.Playlist && screen.id != Library.WATCH_LATER) {
-                    CookieButton(androidx.compose.material.icons.Icons.Rounded.DeleteOutline, "Delete playlist", { Library.deletePlaylist(screen.id); Nav.back() }, shape = Shapes.Sunny)
+                    CookieButton(Icons.Rounded.DeleteOutline, "Delete playlist", { Library.deletePlaylist(screen.id); Nav.back() }, shape = Shapes.Sunny)
                 }
             }
         }

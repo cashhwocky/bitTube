@@ -99,7 +99,7 @@ private fun BloomSheet(onDismiss: () -> Unit, content: @Composable ColumnScope.(
 }
 
 @Composable
-private fun SheetItem(icon: ImageVector, label: String, onClick: () -> Unit, trailing: @Composable () -> Unit = {}) {
+private fun SheetItem(icon: ImageVector, label: String, trailing: @Composable () -> Unit = {}, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp).clip(RoundedCornerShape(22.dp)).squish(scale = 0.97f, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
@@ -158,15 +158,15 @@ private fun SaveSheet(v: VideoRef, onDismiss: () -> Unit) {
         Column(Modifier.verticalScroll(rememberScrollState()).weight(1f, fill = false)) {
             Library.playlists.forEach { p ->
                 val inIt = p.items.any { it.id == v.id }
-                SheetItem(if (p.id == Library.WATCH_LATER) Icons.Rounded.Schedule else Icons.AutoMirrored.Rounded.PlaylistAdd, p.name, {
+                SheetItem(if (p.id == Library.WATCH_LATER) Icons.Rounded.Schedule else Icons.AutoMirrored.Rounded.PlaylistAdd, p.name, onClick = {
                     view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                     Library.togglePlaylist(p.id, v)
-                }) {
+                }, trailing = {
                     Box(
                         Modifier.size(28.dp).clip(Shapes.Sunny).background(if (inIt) Bit.accent else Bit.high),
                         contentAlignment = Alignment.Center,
                     ) { if (inIt) Icon(Icons.Rounded.Check, null, tint = Bit.onAccent, modifier = Modifier.size(17.dp)) }
-                }
+                })
             }
         }
         Row(
@@ -210,15 +210,17 @@ private fun QualitySheet(onDismiss: () -> Unit) {
     BloomSheet(onDismiss) {
         Text("Quality", style = display(19f), modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
         val now = if (Playback.playingHeight > 0) " · playing ${qualityLabel(Playback.playingHeight)}" else ""
-        SheetItem(Icons.Rounded.HighQuality, "Auto (from Settings)$now", { Playback.setQuality(0); onDismiss() }) {
+        SheetItem(Icons.Rounded.HighQuality, "Auto (from Settings)$now", trailing = {
             if (Playback.chosenQuality == 0) Icon(Icons.Rounded.Check, null, tint = Bit.accent)
-        }
+        }) { Playback.setQuality(0); onDismiss() }
         Column(Modifier.verticalScroll(rememberScrollState()).weight(1f, fill = false)) {
             Playback.qualities.forEach { h ->
-                SheetItem(Icons.Rounded.HighQuality, qualityLabel(h), {
+                SheetItem(Icons.Rounded.HighQuality, qualityLabel(h), trailing = {
+                    if (Playback.chosenQuality == h) Icon(Icons.Rounded.Check, null, tint = Bit.accent)
+                }) {
                     view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                     Playback.setQuality(h); onDismiss()
-                }) { if (Playback.chosenQuality == h) Icon(Icons.Rounded.Check, null, tint = Bit.accent) }
+                }
             }
         }
         Row(Modifier.padding(start = 24.dp, top = 14.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
