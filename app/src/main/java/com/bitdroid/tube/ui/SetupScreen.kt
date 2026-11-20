@@ -335,18 +335,9 @@ private fun Done() {
     ) { BitClipsCard() }
 }
 
-const val BITCLIPS_PACKAGE = "com.bitdroid.clips"
-const val BITCLIPS_URL = "https://github.com/cashhwocky/bitClips/releases"
-
-fun bitClipsInstalled(context: android.content.Context): Boolean =
-    runCatching { context.packageManager.getPackageInfo(BITCLIPS_PACKAGE, 0); true }.getOrDefault(false)
-
-/** Shorts aren't in bitTube: they have their own app, bitClips. Explains that and links to it. */
+/** Shorts aren't in bitTube: they have their own app, bitClips. Explains that. */
 @Composable
 fun BitClipsCard() {
-    val context = LocalContext.current
-    var installed by androidx.compose.runtime.remember { mutableStateOf(bitClipsInstalled(context)) }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { installed = bitClipsInstalled(context) }
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(30.dp)).background(Bit.surface).padding(18.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(52.dp).clip(Shapes.Squircle).background(Color(0xFFEADDFF)), contentAlignment = Alignment.Center) {
@@ -364,15 +355,6 @@ fun BitClipsCard() {
                 "with your own personal Shorts feed, comments and double-tap likes. Keeping Shorts out of bitTube means bitTube " +
                 "stays focused on real videos, and bitClips can be built entirely around swiping.",
             style = body(13.5f, Bit.dim),
-        )
-        Spacer(Modifier.height(14.dp))
-        PillButton(
-            if (installed) "Open bitClips" else "Get bitClips",
-            {
-                val open = context.packageManager.getLaunchIntentForPackage(BITCLIPS_PACKAGE)
-                context.startActivity(open ?: Intent(Intent.ACTION_VIEW, Uri.parse(BITCLIPS_URL)))
-            },
-            icon = if (installed) Icons.Rounded.Slideshow else Icons.Rounded.InstallMobile,
         )
     }
 }
