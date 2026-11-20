@@ -336,7 +336,7 @@ private fun Done() {
 }
 
 const val BITCLIPS_PACKAGE = "com.bitdroid.clips"
-const val BITCLIPS_URL = "https://github.com/cashhwocky/bitClips/releases/latest"
+const val BITCLIPS_URL = "https://github.com/cashhwocky/bitClips/releases"
 
 fun bitClipsInstalled(context: android.content.Context): Boolean =
     runCatching { context.packageManager.getPackageInfo(BITCLIPS_PACKAGE, 0); true }.getOrDefault(false)
