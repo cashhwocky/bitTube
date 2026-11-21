@@ -53,15 +53,25 @@ object Sources {
         else -> if (c.startsWith("TVHTML5")) "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version" else Net.BROWSER_UA
     }
 
+    /**
+     * A stream's quality as people say it ("720p"): the short side of the picture. Vertical clips report
+     * their long side as the height (1280 for a 720p clip), which used to make every cap pick 240p.
+     */
+    private val VideoStream.q: Int
+        get() {
+            Regex("(\\d{3,4})p").find(resolution ?: "")?.groupValues?.get(1)?.toIntOrNull()?.let { return it }
+            return if (width > 0 && height > 0) minOf(width, height) else height
+        }
+
     private val playableVideo = setOf(MediaFormat.MPEG_4, MediaFormat.WEBM)
     private val playableAudio = setOf(MediaFormat.M4A, MediaFormat.WEBMA, MediaFormat.WEBMA_OPUS, MediaFormat.OPUS)
 
-    private fun videoOnly(info: StreamInfo) = info.videoOnlyStreams.filter { it.format in playableVideo && it.height > 0 }
+    private fun videoOnly(info: StreamInfo) = info.videoOnlyStreams.filter { it.format in playableVideo && it.q > 0 }
     private fun muxed(info: StreamInfo) = info.videoStreams.filter { it.format in playableVideo }
 
     /** Heights you can pick, best first. */
     fun qualities(info: StreamInfo): List<Int> =
-        (videoOnly(info).map { it.height } + muxed(info).map { it.height }).filter { it > 0 }.distinct().sortedDescending()
+        (videoOnly(info).map { it.q } + muxed(info).map { it.q }).filter { it > 0 }.distinct().sortedDescending()
 
     private fun bestAudio(info: StreamInfo): AudioStream? {
         val all = info.audioStreams.filter { it.format in playableAudio }
@@ -81,20 +91,20 @@ object Sources {
         val limit = if (cap <= 0) Int.MAX_VALUE else cap
         val audio = bestAudio(info)
         val vids = videoOnly(info)
-        val video = vids.filter { it.height <= limit }.maxWithOrNull(videoOrder)
-            ?: vids.minByOrNull { it.height }
+        val video = vids.filter { it.q <= limit }.maxWithOrNull(videoOrder)
+            ?: vids.minByOrNull { it.q }
         if (video != null && audio != null) {
             val dur = info.duration
-            return MergingMediaSource(true, single(video, dur, id), single(audio, dur, id)) to video.height
+            return MergingMediaSource(true, single(video, dur, id), single(audio, dur, id)) to video.q
         }
         val m = muxed(info)
-        val mux = m.filter { it.height <= limit }.maxWithOrNull(videoOrder) ?: m.firstOrNull()
+        val mux = m.filter { it.q <= limit }.maxWithOrNull(videoOrder) ?: m.firstOrNull()
             ?: throw IllegalStateException("No playable stream")
-        return single(mux, info.duration, id) to mux.height
+        return single(mux, info.duration, id) to mux.q
     }
 
     // Higher resolution, then higher frame rate, then MP4 over WebM.
-    private val videoOrder = compareBy<VideoStream>({ it.height }, { it.fps }, { if (it.format == MediaFormat.MPEG_4) 1 else 0 })
+    private val videoOrder = compareBy<VideoStream>({ it.q }, { it.fps }, { if (it.format == MediaFormat.MPEG_4) 1 else 0 })
 
     private fun single(stream: Stream, durationSec: Long, id: String): MediaSource {
         val item = MediaItem.Builder().setUri(stream.content).setMediaId(id).build()
